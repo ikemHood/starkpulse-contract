@@ -1,0 +1,15 @@
+[package]
+name = "starkpulse_contract"
+version = "0.1.0"
+edition = "2023_01"
+cairo-version = "2.4.0"
+
+[dependencies]
+starknet = "2.4.0"
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+
+[scripts]
+test = "scarb cairo-test"
