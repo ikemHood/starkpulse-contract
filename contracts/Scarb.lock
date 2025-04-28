@@ -2,5 +2,5 @@
 version = 1
 
 [[package]]
-name = "on_chain"
+name = "starkpulse_contract"
 version = "0.1.0"
