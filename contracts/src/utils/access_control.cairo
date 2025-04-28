@@ -1,11 +1,11 @@
 #[starknet::contract]
 mod AccessControl {
     use starknet::{ContractAddress, get_caller_address};
-
+    use starknet::storage::Map;
     #[storage]
     struct Storage {
-        roles: LegacyMap<(felt252, ContractAddress), bool>,
-        role_admins: LegacyMap<felt252, felt252>,
+        roles: Map<(felt252, ContractAddress), bool>,
+        role_admins: Map<felt252, felt252>,
         admin: ContractAddress,
     }
 
@@ -35,7 +35,7 @@ mod AccessControl {
         
         // Check if caller has admin role for the role being granted
         let admin_role = self.role_admins.read(role);
-        assert(self.roles.read((admin_role, caller)), "Not authorized");
+        assert(self.roles.read((admin_role, caller)), 'Not authorized');
         
         self.roles.write((role, account), true);
         
@@ -48,7 +48,7 @@ mod AccessControl {
         
         // Check if caller has admin role for the role being revoked
         let admin_role = self.role_admins.read(role);
-        assert(self.roles.read((admin_role, caller)), "Not authorized");
+        assert(self.roles.read((admin_role, caller)), 'Not authorized');
         
         self.roles.write((role, account), false);
         
@@ -70,7 +70,7 @@ mod AccessControl {
         let caller = get_caller_address();
         
         // Only admin can set role admins
-        assert(caller == self.admin.read(), "Not authorized");
+        assert(caller == self.admin.read(), 'Not authorized');
         
         self.role_admins.write(role, admin_role);
         
