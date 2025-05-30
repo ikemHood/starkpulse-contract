@@ -23,4 +23,8 @@ mod vesting {
 #[cfg(test)]
 mod tests {
     pub mod test_token_vesting;
+    pub mod test_user_auth;
+    pub mod test_contract_interaction;
+    pub mod test_erc20_token;
+    pub mod test_starkpulse_token;
 }
