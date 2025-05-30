@@ -1,159 +1,210 @@
+%lang starknet
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Import core StarkNet APIs
+// ─────────────────────────────────────────────────────────────────────────────
 use starknet::ContractAddress;
 use starknet::get_caller_address;
 use starknet::get_block_timestamp;
 
-#[starknet::contract]
-mod PortfolioTracker {
-    use super::ContractAddress;
-    use super::get_caller_address;
-    use super::get_block_timestamp;
-    use array::ArrayTrait;
-    use zeroable::Zeroable;
-    use traits::Into;
-    use box::BoxTrait;
-    use option::OptionTrait;
-    
-    #[derive(Drop, Serde, starknet::Store)]
-    struct Asset {
-        address: ContractAddress,
-        amount: u256,
-        last_updated: u64,
-    }
+// ─────────────────────────────────────────────────────────────────────────────
+// Import your interfaces
+// ─────────────────────────────────────────────────────────────────────────────
+use interfaces::i_portfolio_tracker::IPortfolioTracker;
+use interfaces::i_analytics::IAnalytics;
 
-    #[storage]
-    struct Storage {
-        user_assets: LegacyMap::<(ContractAddress, ContractAddress), Asset>,
-        user_asset_list: LegacyMap::<ContractAddress, Array<ContractAddress>>,
-        admin: ContractAddress,
-    }
+// ─────────────────────────────────────────────────────────────────────────────
+// Aux imports for storage & collections
+// ─────────────────────────────────────────────────────────────────────────────
+use array::ArrayTrait;
+use zeroable::Zeroable;
+use traits::Into;
+use box::BoxTrait;
+use option::OptionTrait;
 
-    #[constructor]
-    fn constructor(ref self: ContractState, admin_address: ContractAddress) {
-        self.admin.write(admin_address);
-    }
-
-    #[external(v0)]
-    impl PortfolioTrackerImpl of super::IPortfolioTracker<ContractState> {
-        fn add_asset(
-            ref self: ContractState, 
-            asset_address: ContractAddress, 
-            amount: u256
-        ) -> bool {
-            let caller = get_caller_address();
-            assert(!caller.is_zero(), 'Invalid caller');
-            assert(!asset_address.is_zero(), 'Invalid asset address');
-            
-            let current_time = get_block_timestamp();
-            let existing_asset = self.user_assets.read((caller, asset_address));
-            
-            if existing_asset.address.is_zero() {
-                // New asset
-                let asset = Asset {
-                    address: asset_address,
-                    amount: amount,
-                    last_updated: current_time,
-                };
-                
-                self.user_assets.write((caller, asset_address), asset);
-                
-                // Add to user's asset list
-                // Note: In a real implementation, you would need to handle array storage differently
-                // This is simplified for demonstration
-                let mut asset_list = self.user_asset_list.read(caller);
-                asset_list.append(asset_address);
-                self.user_asset_list.write(caller, asset_list);
-            } else {
-                // Update existing asset
-                let updated_asset = Asset {
-                    address: asset_address,
-                    amount: existing_asset.amount + amount,
-                    last_updated: current_time,
-                };
-                
-                self.user_assets.write((caller, asset_address), updated_asset);
-            }
-            
-            true
-        }
-
-        fn remove_asset(
-            ref self: ContractState, 
-            asset_address: ContractAddress, 
-            amount: u256
-        ) -> bool {
-            let caller = get_caller_address();
-            let existing_asset = self.user_assets.read((caller, asset_address));
-            
-            assert(!existing_asset.address.is_zero(), 'Asset not found');
-            assert(existing_asset.amount >= amount, 'Insufficient asset amount');
-            
-            let current_time = get_block_timestamp();
-            
-            if existing_asset.amount == amount {
-                // Remove asset completely
-                let zero_asset = Asset {
-                    address: contract_address_const::<0>(),
-                    amount: 0,
-                    last_updated: current_time,
-                };
-                
-                self.user_assets.write((caller, asset_address), zero_asset);
-                
-                // Remove from user's asset list
-                // Note: In a real implementation, you would need to handle array storage differently
-                // This is simplified for demonstration
-                let mut asset_list = self.user_asset_list.read(caller);
-                // Filtering logic would be implemented here
-                self.user_asset_list.write(caller, asset_list);
-            } else {
-                // Update existing asset
-                let updated_asset = Asset {
-                    address: asset_address,
-                    amount: existing_asset.amount - amount,
-                    last_updated: current_time,
-                };
-                
-                self.user_assets.write((caller, asset_address), updated_asset);
-            }
-            
-            true
-        }
-
-        fn get_portfolio(self: @ContractState, user_address: ContractAddress) -> Array<Asset> {
-            let asset_list = self.user_asset_list.read(user_address);
-            let mut portfolio = ArrayTrait::new();
-            
-            // Iterate through asset list and add to portfolio
-            // Note: In a real implementation, you would need to handle array iteration differently
-            // This is simplified for demonstration
-            
-            portfolio
-        }
-
-        fn get_portfolio_value(self: @ContractState, user_address: ContractAddress) -> u256 {
-            let asset_list = self.user_asset_list.read(user_address);
-            let mut total_value: u256 = 0;
-            
-            // Calculate total value
-            // Note: In a real implementation, you would need to handle price feeds and calculations
-            // This is simplified for demonstration
-            
-            total_value
-        }
-    }
-}
-
-#[starknet::interface]
-trait IPortfolioTracker<TContractState> {
-    fn add_asset(ref self: TContractState, asset_address: ContractAddress, amount: u256) -> bool;
-    fn remove_asset(ref self: TContractState, asset_address: ContractAddress, amount: u256) -> bool;
-    fn get_portfolio(self: @ContractState, user_address: ContractAddress) -> Array<Asset>;
-    fn get_portfolio_value(self: @ContractState, user_address: ContractAddress) -> u256;
-}
-
-#[derive(Drop, Serde)]
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset struct & Storage
+// ─────────────────────────────────────────────────────────────────────────────
+#[derive(Drop, Serde, starknet::Store)]
 struct Asset {
     address: ContractAddress,
     amount: u256,
     last_updated: u64,
+}
+
+#[storage]
+struct Storage {
+    // Mapping (user, asset_address) → Asset
+    user_assets: LegacyMap::<(ContractAddress, ContractAddress), Asset>,
+    // For each user, list of held asset addresses
+    user_asset_list: LegacyMap::<ContractAddress, Array<ContractAddress>>,
+    // Admin address
+    admin: ContractAddress,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Analytics address (set this AFTER you deploy analytics_store.cairo)
+// ─────────────────────────────────────────────────────────────────────────────
+// Replace 0x012345 with the real address from your deploy!
+const ANALYTICS_ADDRESS: ContractAddress = ContractAddressConst::<0x012345>();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTRACT MODULE
+// ─────────────────────────────────────────────────────────────────────────────
+#[starknet::contract]
+mod PortfolioTracker {
+    use super::*;
+
+    // ----------------------------
+    // Constructor
+    // ----------------------------
+    #[constructor]
+    fn constructor(ref self: ContractState, admin_address: ContractAddress) {
+        // Only the deployer can set
+        self.admin.write(admin_address);
+    }
+
+    // ----------------------------
+    // External functions
+    // ----------------------------
+    #[external(v0)]
+    impl PortfolioTrackerImpl of IPortfolioTracker<ContractState> {
+        /// Add `amount` of `asset_address` to caller's portfolio.
+        fn add_asset(
+            ref self: ContractState,
+            asset_address: ContractAddress,
+            amount: u256
+        ) -> bool {
+            // 1) Basic checks
+            let caller = get_caller_address();
+            assert(!caller.is_zero(), 'Invalid caller');
+            assert(!asset_address.is_zero(), 'Invalid asset');
+
+            // 2) Timestamp
+            let ts = get_block_timestamp();
+
+            // 3) Read existing
+            let existing = self.user_assets.read((caller, asset_address));
+
+            // 4) New vs update
+            if existing.address.is_zero() {
+                // New asset entry
+                let a = Asset {
+                    address: asset_address,
+                    amount,
+                    last_updated: ts,
+                };
+                self.user_assets.write((caller, asset_address), a);
+
+                // Append to asset_list
+                let mut list = self.user_asset_list.read(caller);
+                list.append(asset_address);
+                self.user_asset_list.write(caller, list);
+            } else {
+                // Update existing
+                let updated = Asset {
+                    address: asset_address,
+                    amount: existing.amount + amount,
+                    last_updated: ts,
+                };
+                self.user_assets.write((caller, asset_address), updated);
+            }
+
+            // 5) Analytics: action_id = 1
+            let analytics = IAnalytics::at(ANALYTICS_ADDRESS);
+            analytics.track_interaction(caller, 1).invoke();
+
+            true
+        }
+
+        /// Remove `amount` of `asset_address` from caller's portfolio.
+        fn remove_asset(
+            ref self: ContractState,
+            asset_address: ContractAddress,
+            amount: u256
+        ) -> bool {
+            let caller = get_caller_address();
+            let existing = self.user_assets.read((caller, asset_address));
+            assert(!existing.address.is_zero(), 'Asset not found');
+            assert(existing.amount >= amount, 'Insufficient balance');
+
+            let ts = get_block_timestamp();
+            if existing.amount == amount {
+                // Remove completely
+                let zeroed = Asset {
+                    address: ContractAddressConst::<0>(),
+                    amount: 0,
+                    last_updated: ts,
+                };
+                self.user_assets.write((caller, asset_address), zeroed);
+
+                // NOTE: real removal from Array requires rebuilding the list;
+                // here we simply leave it – in prod you'd filter it out.
+                let list = self.user_asset_list.read(caller);
+                self.user_asset_list.write(caller, list);
+            } else {
+                // Decrease amount
+                let updated = Asset {
+                    address: asset_address,
+                    amount: existing.amount - amount,
+                    last_updated: ts,
+                };
+                self.user_assets.write((caller, asset_address), updated);
+            }
+
+            // Analytics: action_id = 2
+            let analytics = IAnalytics::at(ANALYTICS_ADDRESS);
+            analytics.track_interaction(caller, 2).invoke();
+
+            true
+        }
+
+        /// Return all Assets for `user_address`.
+        fn get_portfolio(self: @ContractState, user_address: ContractAddress) -> Array<Asset> {
+            let addresses = self.user_asset_list.read(user_address);
+            let mut out = ArrayTrait::new();
+
+            // NOTE: real iteration needs a proper loop;
+            // here is a pseudocode placeholder:
+            //
+            // for addr in addresses {
+            //     let asset = self.user_assets.read((user_address, addr));
+            //     out.append(asset);
+            // }
+            //
+            // Fill with zero-length for demo:
+            out
+        }
+
+        /// Sum of all asset.amount for `user_address`.
+        fn get_portfolio_value(self: @ContractState, user_address: ContractAddress) -> u256 {
+            let addresses = self.user_asset_list.read(user_address);
+            let mut total: u256 = 0;
+
+            // Pseudocode:
+            // for addr in addresses {
+            //     let asset = self.user_assets.read((user_address, addr));
+            //     // In reality you'd fetch price and multiply
+            //     total = total + asset.amount;
+            // }
+
+            total
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Interface definitions (for completeness – you can keep these separate)
+// ─────────────────────────────────────────────────────────────────────────────
+#[starknet::interface]
+trait IPortfolioTracker<T> {
+    fn add_asset(ref self: T, asset_address: ContractAddress, amount: u256) -> bool;
+    fn remove_asset(ref self: T, asset_address: ContractAddress, amount: u256) -> bool;
+    fn get_portfolio(self: @T, user_address: ContractAddress) -> Array<Asset>;
+    fn get_portfolio_value(self: @T, user_address: ContractAddress) -> u256;
+}
+
+#[starknet::interface]
+trait IAnalytics {
+    fn track_interaction(ref self: ContractAddress, user: ContractAddress, action_id: felt) -> ();
 }
