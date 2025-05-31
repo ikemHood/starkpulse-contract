@@ -1,5 +1,13 @@
 // StarkPulse ERC20 Token Implementation
 // A complete, secure ERC20 token contract with all standard functionality
+// 
+// Features:
+// - Full ERC20 compliance with standard Transfer and Approval events
+// - Minting and burning capabilities with access control
+// - Emergency pause functionality
+// - Max supply enforcement
+// - Role-based permissions (owner, minters)
+// - Comprehensive security validations
 
 #[starknet::contract]
 mod ERC20Token {
@@ -47,14 +55,18 @@ mod ERC20Token {
 
     #[derive(Drop, starknet::Event)]
     struct Transfer {
+        #[key]
         from: ContractAddress,
+        #[key]
         to: ContractAddress,
         value: u256,
     }
 
     #[derive(Drop, starknet::Event)]
     struct Approval {
+        #[key]
         owner: ContractAddress,
+        #[key]
         spender: ContractAddress,
         value: u256,
     }
@@ -156,37 +168,63 @@ mod ERC20Token {
 
     #[abi(embed_v0)]
     impl ERC20Impl of IERC20<ContractState> {
-        // Standard ERC20 functions
+        /// Returns the name of the token
+        /// @return The token name as felt252
         fn name(self: @ContractState) -> felt252 {
             self.name.read()
         }
 
+        /// Returns the symbol of the token
+        /// @return The token symbol as felt252
         fn symbol(self: @ContractState) -> felt252 {
             self.symbol.read()
         }
 
+        /// Returns the number of decimals used for token amounts
+        /// @return The number of decimals as u8
         fn decimals(self: @ContractState) -> u8 {
             self.decimals.read()
         }
 
+        /// Returns the total token supply
+        /// @return The total supply as u256
         fn total_supply(self: @ContractState) -> u256 {
             self.total_supply.read()
         }
 
+        /// Returns the token balance of a specific account
+        /// @param account The address to query the balance of
+        /// @return The balance as u256
         fn balance_of(self: @ContractState, account: ContractAddress) -> u256 {
             self.balances.read(account)
         }
 
+        /// Returns the remaining number of tokens that spender is allowed to spend on behalf of owner
+        /// @param owner The address that owns the tokens
+        /// @param spender The address that is allowed to spend the tokens
+        /// @return The allowance as u256
         fn allowance(self: @ContractState, owner: ContractAddress, spender: ContractAddress) -> u256 {
             self.allowances.read((owner, spender))
         }
 
+        /// Transfers tokens from the caller to a recipient
+        /// @param recipient The address to transfer tokens to
+        /// @param amount The amount of tokens to transfer
+        /// @return true if the transfer was successful
+        /// Emits a Transfer event
         fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u256) -> bool {
             let sender = get_caller_address();
             self._transfer(sender, recipient, amount);
             true
         }
 
+        /// Transfers tokens from one address to another using allowance mechanism
+        /// @param sender The address to transfer tokens from
+        /// @param recipient The address to transfer tokens to
+        /// @param amount The amount of tokens to transfer
+        /// @return true if the transfer was successful
+        /// Requires sufficient allowance if caller is not the sender
+        /// Emits a Transfer event
         fn transfer_from(
             ref self: ContractState, 
             sender: ContractAddress, 
@@ -208,6 +246,11 @@ mod ERC20Token {
             true
         }
 
+        /// Approves another address to spend tokens on behalf of the caller
+        /// @param spender The address to approve for spending
+        /// @param amount The amount of tokens to approve
+        /// @return true if the approval was successful
+        /// Emits an Approval event
         fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool {
             let owner = get_caller_address();
             self._approve(owner, spender, amount);
@@ -236,6 +279,12 @@ mod ERC20Token {
     // Additional functions for enhanced functionality
     #[abi(embed_v0)]
     impl ERC20ExtendedImpl of IERC20Extended<ContractState> {
+        /// Mints new tokens to a specified address (only callable by minters)
+        /// @param to The address to mint tokens to
+        /// @param amount The amount of tokens to mint
+        /// @return true if minting was successful
+        /// Requires: caller must be a minter, contract not paused, within max supply
+        /// Emits Transfer and Mint events
         fn mint(ref self: ContractState, to: ContractAddress, amount: u256) -> bool {
             self._assert_only_minter();
             self._assert_not_paused();
@@ -272,6 +321,11 @@ mod ERC20Token {
             true
         }
 
+        /// Burns tokens from the caller's balance
+        /// @param amount The amount of tokens to burn
+        /// @return true if burning was successful
+        /// Requires: sufficient balance, contract not paused, token is burnable
+        /// Emits Transfer and Burn events
         fn burn(ref self: ContractState, amount: u256) -> bool {
             let caller = get_caller_address();
             self._burn(caller, amount);
@@ -346,6 +400,10 @@ mod ERC20Token {
             true
         }
 
+        /// Pauses all token transfers (only callable by owner)
+        /// @return true if pausing was successful
+        /// Requires: caller must be owner, contract not already paused
+        /// Emits Paused event
         fn pause(ref self: ContractState) -> bool {
             self._assert_only_owner();
             assert(!self.paused.read(), 'ERC20: already paused');

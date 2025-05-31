@@ -1,5 +1,16 @@
 // StarkPulse Native Token Implementation
 // The official token of the StarkPulse ecosystem
+//
+// Token Details:
+// - Name: StarkPulse Token
+// - Symbol: SPT
+// - Decimals: 18
+// - Initial Supply: 100,000,000 SPT
+// - Max Supply: 1,000,000,000 SPT
+// - Features: Mintable, Burnable, Pausable
+//
+// This token serves as the native currency for the StarkPulse DeFi platform,
+// enabling governance, staking, and transaction fee payments.
 
 #[starknet::contract]
 mod StarkPulseToken {
@@ -12,6 +23,9 @@ mod StarkPulseToken {
         erc20: ERC20Token::ContractState,
     }
 
+    /// Initializes the StarkPulse Token with predefined parameters
+    /// @param owner The address that will own the token contract and receive initial supply
+    /// Sets up the token with StarkPulse-specific tokenomics and features
     #[constructor]
     fn constructor(ref self: ContractState, owner: ContractAddress) {
         // Initialize with StarkPulse token parameters

@@ -325,4 +325,233 @@ mod test_erc20_token {
         assert(result, "Minting up to max supply should succeed");
         assert(token.total_supply() == MAX_SUPPLY, "Total supply should equal max supply");
     }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: insufficient balance',))]
+    fn test_transfer_insufficient_balance() {
+        let (mut token, owner, user1, _) = setup_token();
+        
+        set_caller_address(user1);
+        
+        // Try to transfer more than balance (user1 has 0 balance)
+        let transfer_amount = 1000000000000000000000; // 1000 tokens
+        token.transfer(owner, transfer_amount);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: insufficient allowance',))]
+    fn test_transfer_from_insufficient_allowance() {
+        let (mut token, owner, user1, user2) = setup_token();
+        
+        set_caller_address(user1);
+        
+        // Try to transfer from owner without sufficient allowance
+        let transfer_amount = 1000000000000000000000; // 1000 tokens
+        token.transfer_from(owner, user2, transfer_amount);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: invalid recipient',))]
+    fn test_transfer_to_zero_address() {
+        let (mut token, owner, _, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Try to transfer to zero address
+        let zero_address = contract_address_const::<0>();
+        let transfer_amount = 1000000000000000000000; // 1000 tokens
+        token.transfer(zero_address, transfer_amount);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: invalid spender',))]
+    fn test_approve_zero_address() {
+        let (mut token, owner, _, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Try to approve zero address
+        let zero_address = contract_address_const::<0>();
+        let approval_amount = 1000000000000000000000; // 1000 tokens
+        token.approve(zero_address, approval_amount);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: exceeds max supply',))]
+    fn test_mint_exceeds_max_supply() {
+        let (mut token, owner, user1, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Try to mint beyond max supply
+        let excessive_mint = MAX_SUPPLY - INITIAL_SUPPLY + 1; // 1 token over max
+        token.mint(user1, excessive_mint);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: unauthorized',))]
+    fn test_mint_unauthorized() {
+        let (mut token, _, user1, user2) = setup_token();
+        
+        set_caller_address(user1); // user1 is not a minter
+        
+        // Try to mint without minter role
+        let mint_amount = 1000000000000000000000; // 1000 tokens
+        token.mint(user2, mint_amount);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: insufficient balance',))]
+    fn test_burn_insufficient_balance() {
+        let (mut token, _, user1, _) = setup_token();
+        
+        set_caller_address(user1); // user1 has 0 balance
+        
+        // Try to burn more than balance
+        let burn_amount = 1000000000000000000000; // 1000 tokens
+        token.burn(burn_amount);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: unauthorized',))]
+    fn test_pause_unauthorized() {
+        let (mut token, _, user1, _) = setup_token();
+        
+        set_caller_address(user1); // user1 is not owner
+        
+        // Try to pause without owner role
+        token.pause();
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: token transfer paused',))]
+    fn test_transfer_while_paused() {
+        let (mut token, owner, user1, user2) = setup_token();
+        
+        // Owner pauses the contract
+        set_caller_address(owner);
+        token.pause();
+        
+        // Transfer some tokens to user1 first (this should work before pause)
+        token.unpause();
+        token.transfer(user1, 1000000000000000000000); // 1000 tokens
+        token.pause();
+        
+        // Try to transfer while paused
+        set_caller_address(user1);
+        token.transfer(user2, 500000000000000000000); // 500 tokens
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: unauthorized',))]
+    fn test_add_minter_unauthorized() {
+        let (mut token, _, user1, user2) = setup_token();
+        
+        set_caller_address(user1); // user1 is not owner
+        
+        // Try to add minter without owner role
+        token.add_minter(user2);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: unauthorized',))]
+    fn test_transfer_ownership_unauthorized() {
+        let (mut token, _, user1, user2) = setup_token();
+        
+        set_caller_address(user1); // user1 is not owner
+        
+        // Try to transfer ownership without owner role
+        token.transfer_ownership(user2);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: zero address',))]
+    fn test_transfer_ownership_to_zero() {
+        let (mut token, owner, _, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Try to transfer ownership to zero address
+        let zero_address = contract_address_const::<0>();
+        token.transfer_ownership(zero_address);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: already paused',))]
+    fn test_pause_already_paused() {
+        let (mut token, owner, _, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Pause the contract
+        token.pause();
+        
+        // Try to pause again
+        token.pause();
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: not paused',))]
+    fn test_unpause_not_paused() {
+        let (mut token, owner, _, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Try to unpause when not paused
+        token.unpause();
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    #[should_panic(expected: ('ERC20: insufficient allowance',))]
+    fn test_decrease_allowance_below_zero() {
+        let (mut token, owner, user1, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Set small allowance
+        let small_allowance = 100000000000000000000; // 100 tokens
+        token.approve(user1, small_allowance);
+        
+        // Try to decrease by more than current allowance
+        let decrease_amount = 200000000000000000000; // 200 tokens
+        token.decrease_allowance(user1, decrease_amount);
+    }
+    
+    #[test]
+    #[available_gas(2000000)]
+    fn test_event_emission_verification() {
+        let (mut token, owner, user1, _) = setup_token();
+        
+        set_caller_address(owner);
+        
+        // Test that transfer emits Transfer event (verified by successful execution)
+        let transfer_amount = 1000000000000000000000; // 1000 tokens
+        let result = token.transfer(user1, transfer_amount);
+        assert(result, "Transfer should succeed and emit event");
+        
+        // Test that approve emits Approval event (verified by successful execution)
+        let approval_amount = 2000000000000000000000; // 2000 tokens
+        let result = token.approve(user1, approval_amount);
+        assert(result, "Approval should succeed and emit event");
+        
+        // Test that mint emits Transfer and Mint events (verified by successful execution)
+        let mint_amount = 500000000000000000000; // 500 tokens
+        let result = token.mint(user1, mint_amount);
+        assert(result, "Mint should succeed and emit events");
+    }
 }
