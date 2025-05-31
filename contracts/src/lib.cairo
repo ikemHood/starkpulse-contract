@@ -5,6 +5,8 @@
 mod interfaces {
     pub mod i_erc20;
     pub mod i_token_vesting;
+    pub mod i_user_auth;
+    pub mod i_contract_interaction;
     pub mod i_transaction_monitor;
     pub mod i_portfolio_tracker;
 }
